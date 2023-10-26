@@ -1,0 +1,17 @@
+FROM golang:1.21.1 
+
+WORKDIR /usr/src/local
+
+COPY . .
+
+RUN go mod download
+
+# thanks man! https://github.com/vishnubob/wait-for-it
+COPY initialise/wait-for-it.sh /usr/src/local/wait-for-it.sh
+RUN chmod +x /usr/src/local/wait-for-it.sh 
+
+RUN go build cmd/main.go 
+
+EXPOSE 3000
+
+CMD ["./wait-for-it.sh", "postgres:5432", "--", "./wait-for-it.sh", "redis:6379", "--", "./main"]

@@ -1,0 +1,36 @@
+version: "3"
+services:
+  go-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+        # condition: service_healthy
+      - redis
+        # condition: service_healthy
+    restart: on-failure
+
+  redis:
+    build:
+      context: .
+      dockerfile: Dockerfile.redis
+    ports:
+      - "6379:6379"
+    stdin_open: true
+    tty: true
+
+  postgres:
+    image: postgres:latest
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/scripts/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
