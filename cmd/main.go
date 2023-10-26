@@ -5,6 +5,7 @@ import (
 	"CloudKeep/initialise"
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
@@ -28,12 +29,12 @@ func main() {
         c.String(http.StatusOK, "Hello World")
     })
     
-	router.POST("/register/send-email-otp", func(c *gin.Context) {
+	router.POST("/api/register/send-email-otp", func(c *gin.Context) {
 		handlers.RegisterNewAccount(c, ctx, redisClient)
 	})    
-    router.POST("/register/verify-otp", func(c *gin.Context) {
+    router.POST("/api/register/verify-otp", func(c *gin.Context) {
 		handlers.VerifyRegistrationOTP(c, ctx, redisClient, db)
 	})    
-    router.Run(":3000")
+    router.Run(os.Getenv("PORT"))
 
 }

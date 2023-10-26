@@ -6,13 +6,24 @@
 
 ### QUICK START
 
-..........
+Download & Install Docker
+`git clone https://github.com/shripadaRao/CloudKeep.git `
+`sudo docker-compose up --build`
 
 ### API DESIGN
 
-This document provides details about the API endpoints and their usage for the Authentication System project.
-
-User Registration
-Endpoint: `/api/register` `POST`
+##### User Registration
 
 Description: Allows users to create a new account. To configure the template of email, head to config/registerEmailTemplate.json.
+
+Endpoints:
+
+1. `/api/register/send-email-otp` `POST`
+2. `/api/register/verify-otp` `POST`
+3. `/api/register/create-user` `POST`
+
+### System Design
+
+##### User Registrations
+
+<img src="assets/user_registrations_workflow.png" alt="drawing" width="800" height="1000"/>
