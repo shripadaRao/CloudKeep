@@ -20,115 +20,135 @@ import (
 const OTPExpirationTime = 10 * time.Minute
 
 
-func SendRegistrationEmail(emailAddress string) (string, error) {
+func SendRegistrationEmail(c *gin.Context, ctx context.Context, redisClient *redis.Client) {
+    var requestData struct {
+        UserEmail string `json:"userEmail"`
+        UserId    string `json:"userId"`
+    }
+
+    if err := c.ShouldBindJSON(&requestData); err != nil {
+        log.Printf("Error in receiving user data: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "status": "error"})
+        return
+    }
+
 	templateEmailSubject, templateEmailBody, err := utils.ParseEmailTemplate("config/registrationEmailTemplate.json")
 	if err != nil {
-		log.Printf("Error loading email template: %v", err)
-		return "", err
+		log.Printf("Error in loading email template: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "status": "error"})
+		return 
 	}
+
 	otp := utils.GenerateOTP()
 	emailBody := utils.GenerateEmailBody(templateEmailBody, otp)
 
-	isEmailDispatchSuccessful, err := utils.SendEmail(emailAddress, templateEmailSubject, emailBody)
+	isEmailDispatchSuccessful, err := utils.SendEmail(requestData.UserEmail, templateEmailSubject, emailBody)
 	if err != nil {
 		log.Printf("Email dispatch failed: %v", err)
-		return "", err
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "status": "error"})
+		return 
 	}
 
 	if !isEmailDispatchSuccessful {
 		err := fmt.Errorf("Email dispatch failed")
 		log.Printf("Email dispatch failed: %v", err)
-		return "", err
+		return 
 	}
 
-	return otp, nil
-}
+    var emailRegistrationRequest models.EmailRegistrationRequest
+    emailRegistrationRequest.IsVerified = false
+    emailRegistrationRequest.OTP = otp
 
-
-func RegisterNewAccount(c *gin.Context, ctx context.Context, redisClient *redis.Client) {
-    // Collect UnVerifiedUser details from the request
-    var unVerifiedUser models.UnVerifiedUser
-    if err := c.BindJSON(&unVerifiedUser); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error in parsing user input while registering": err.Error()})
-        return
-    }
-
-    // Send OTP and get the OTP value
-    OTP, err := SendRegistrationEmail(unVerifiedUser.UserEmail)
+    err = utils.RedisSetData(ctx, redisClient, requestData.UserId, emailRegistrationRequest, OTPExpirationTime)
     if err != nil {
-        log.Printf("Email dispatch failed: %v", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send OTP email"})
+        log.Printf("Error in writing into redis while sending otp: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error" : err.Error(), "status": "error"})
+    }
+    c.JSON(http.StatusOK, gin.H{"message": "OTP sent successfully", "status": "success"})
+	return 
+}
+
+func VerifyRegistrationOTP(c *gin.Context, ctx context.Context, redisClient *redis.Client) {
+    var userInput models.VerifyRegistrationOTPModel
+    if err := c.BindJSON(&userInput); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error:": fmt.Sprintf("error in parsing user input while verifying otp %s: ",err.Error()), "status": "error"})
         return
     }
-
-    // Create a RegisterUser object and populate it
-    registerUser := models.RegisterUser{
-        Username:  unVerifiedUser.Username,
-        Password:  unVerifiedUser.Password,
-        UserEmail: unVerifiedUser.UserEmail,
-        OTP:       OTP,
-    }
-
-	//create userid
-	//todo improve this later
-	userId := registerUser.Username
-
-
-    // Store the RegisterUser object in Redis
-    err = utils.RedisSetData(ctx, redisClient, userId, registerUser, OTPExpirationTime)
+    // fetch otp from redis key
+    userRegistrationData, err := utils.RedisGetData(ctx, redisClient, userInput.UserId)
     if err != nil {
-        log.Printf("Error storing user data in Redis: %v", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to store user data"})
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Key", "message": "Key has been expired or does not exist."})
+        return
+    }   
+
+    var userData models.VerifyRegistrationOTPModel
+    if err := json.Unmarshal([]byte(userRegistrationData.(string)), &userData); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error", "message": "Failed to retrieve user data from Redis."})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"message": "Email with OTP has been successfully sent"})
-}
+    var userEmailVerificationData models.EmailRegistrationRequest
+    userEmailVerificationData.IsVerified = true
 
-type VerifyRegistrationOTPModel struct {
-    UserEmail string
-    UserId  string
-    OTP    string
-}
-func VerifyRegistrationOTP(c *gin.Context, ctx context.Context, redisClient *redis.Client, db *sql.DB) {
- var userInput VerifyRegistrationOTPModel
- if err := c.BindJSON(&userInput); err != nil {
-    c.JSON(http.StatusBadRequest, gin.H{"error in parsing user input while registering": err.Error()})
-    return
-}
-// fetch otp from redis key
- userRegistrationData, err := utils.RedisGetData(ctx, redisClient, userInput.UserId)
- if err != nil {
-    c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Key", "message": "Key has been expired or does not exist."})
-    return
-}   
+    if (userInput.OTP == userData.OTP){
+            // otp check success
+            err := utils.RedisSetData(ctx, redisClient, userInput.UserId, userEmailVerificationData, OTPExpirationTime)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error":"error in setting redis client", "status": "error"})
+            }
 
-var userData models.RegisterUser
-if err := json.Unmarshal([]byte(userRegistrationData.(string)), &userData); err != nil {
-    c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error", "message": "Failed to retrieve user data from Redis."})
-    return
-}
-
- if (userInput.OTP == userData.OTP){
-        // otp check success
-        // permanent entry in postgres
-        // remove entry from redis
-        c.JSON(http.StatusOK, gin.H{"message": "OTP verification successful"})
-        } else {
-    // otp check failed
-    //return 401
-    c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP", "message": "The provided OTP is incorrect."})
-        }
-
+            c.JSON(http.StatusOK, gin.H{"message": "OTP verification successful", "status": "success"})
+            } else {
+        // otp check failed
+        //return 401
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP", "message": "The provided OTP is incorrect."})
+            }
 } 
 
-//dummy API
-    func SendRegistrationEmailAPI(c *gin.Context) {
-	_, err := SendRegistrationEmail("srao06558@gmail.com")
+func CreateUser(c *gin.Context, ctx context.Context, redisClient *redis.Client, db *sql.DB) {
+    var userInput models.RegisterUser
+    if err := c.BindJSON(&userInput); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error:": fmt.Sprintf("error in parsing user input while verifying otp %s: ",err.Error()), "status": "error"})
+        return
+    }
+    //check redis for verification
+    userPreRegistrationData, err := utils.RedisGetData(ctx, redisClient, userInput.UserID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send registration email"})
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Key", "message": "Key has been expired or does not exist."})
+        return
+    }   
+
+    var userData models.EmailRegistrationRequest
+    if err := json.Unmarshal([]byte(userPreRegistrationData.(string)), &userData); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error", "message": "Failed to retrieve user data from Redis."})
         return
     }
 
-    // Respond with a success message
-    c.JSON(http.StatusOK, gin.H{"message": "Registration email sent successfully"})}
+    if userData.IsVerified == false {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "failed to authenticate", "status": "failed"})
+        return
+    }
+
+    //password processing
+    userInputPassword := userInput.Password
+    salt := utils.GenerateSalt()
+    saltedPassword := userInputPassword + salt
+    hashedPassword := utils.HashPassword(saltedPassword)
+
+    //database entry
+    var user models.User
+    user.Username = userInput.Username
+    user.UserID = userInput.UserID
+    user.UserEmail =  userInput.UserEmail
+    user.Password = hashedPassword
+    user.Salt = string(salt)    
+
+    err = utils.CreateUserDBEntry(db, "user_table", user)
+    if err != nil {
+        log.Printf("failed to write to database: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("error while writing to db: %v", err), "status": "failed"})
+        return
+    }
+    c.JSON(http.StatusCreated, gin.H{"message":"successful in creating new user", "status": "success"})
+    return 
+}

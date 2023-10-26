@@ -4,6 +4,7 @@ import (
 	"CloudKeep/handlers"
 	"CloudKeep/initialise"
 	"context"
+	"log"
 	"net/http"
 	"os"
 
@@ -21,7 +22,6 @@ func main() {
 
     ctx := context.Background()
 
-
     //routes
     router := gin.Default()
 
@@ -30,11 +30,17 @@ func main() {
     })
     
 	router.POST("/api/register/send-email-otp", func(c *gin.Context) {
-		handlers.RegisterNewAccount(c, ctx, redisClient)
+		handlers.SendRegistrationEmail(c, ctx, redisClient)
 	})    
     router.POST("/api/register/verify-otp", func(c *gin.Context) {
-		handlers.VerifyRegistrationOTP(c, ctx, redisClient, db)
+		handlers.VerifyRegistrationOTP(c, ctx, redisClient)
 	})    
-    router.Run(os.Getenv("PORT"))
+    router.POST("/api/register/create-user", func(c *gin.Context) {
+        handlers.CreateUser(c, ctx, redisClient, db)
+    })
 
+    err := router.Run(os.Getenv("PORT"))
+    if err != nil {
+        log.Fatalf("Error in running server: %v", err)
+    }
 }

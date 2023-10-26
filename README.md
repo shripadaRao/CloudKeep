@@ -7,7 +7,9 @@
 ### QUICK START
 
 Download & Install Docker
+
 `git clone https://github.com/shripadaRao/CloudKeep.git `
+
 `sudo docker-compose up --build`
 
 ### API DESIGN
@@ -16,11 +18,41 @@ Download & Install Docker
 
 Description: Allows users to create a new account. To configure the template of email, head to config/registerEmailTemplate.json.
 
-Endpoints:
+1. `POST` `/api/register/send-email-otp`
 
-1. `/api/register/send-email-otp` `POST`
-2. `/api/register/verify-otp` `POST`
-3. `/api/register/create-user` `POST`
+###### Description: Send an OTP email to a user
+
+Request Body:
+
+```
+{
+    "userId": string,
+    "userEmail": string
+}
+```
+
+2. `POST` `/api/register/verify-otp`
+
+```
+request body:
+{
+    "OTP": string,
+    "userId": string,
+    "userEmail": string
+}
+```
+
+3. `POST` `/api/register/create-user`
+
+```
+request body:
+{
+    "userName": string,
+    "userId": string,
+    "password": string,
+    "userEmail": string
+}
+```
 
 ### System Design
 
