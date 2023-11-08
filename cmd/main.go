@@ -38,6 +38,10 @@ func main() {
     router.POST("/api/register/create-user", func(c *gin.Context) {
         handlers.CreateUser(c, ctx, redisClient, db)
     })
+    
+    router.POST("/api/login/userid-password", func(c *gin.Context){
+        handlers.LoginUserByUserIdPassword(c, ctx, db)
+    })
 
     err := router.Run(os.Getenv("PORT"))
     if err != nil {
