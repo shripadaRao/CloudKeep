@@ -1,4 +1,4 @@
-package utils
+package user_registration_utils
 
 import (
 	"CloudKeep/models"
@@ -13,8 +13,12 @@ import (
 )
 
 func HashPassword(password string) (string) {
-	salt, _ := bcrypt.GenerateFromPassword([]byte(password), 10)
-	return string(salt)
+	hashedSaltedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		log.Panic(err)
+		return ""
+	}
+	return string(hashedSaltedPassword)
 }
 
 func GenerateSalt() string {
@@ -25,7 +29,7 @@ func GenerateSalt() string {
 	return u.String()
 }
 
-func CreateUserDBEntry(db *sql.DB, table string, user models.User) error {
+func CreateVerifiedUserRegistration(db *sql.DB, table string, user models.User) error {
 	fmt.Println(user.Salt)
     query := `
         INSERT INTO "` + table + `" (username, password, userEmail, salt, userId)
