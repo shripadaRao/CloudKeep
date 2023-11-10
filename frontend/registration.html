@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Register Page</title>
+  </head>
+  <body>
+    <h2>Register</h2>
+    <form id="registration-form">
+      <label for="new-username">Username:</label>
+      <input type="text" id="new-username" name="new-username" required /><br />
+      <label for="new-password">Password:</label>
+      <input
+        type="password"
+        id="new-password"
+        name="new-password"
+        required
+      /><br />
+      <button onclick="registerUser()">Register</button>
+    </form>
+    <p>Already have an account? <a href="index.html">Login here</a></p>
+    <script src="app.js"></script>
+  </body>
+</html>
