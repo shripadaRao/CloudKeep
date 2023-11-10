@@ -12,6 +12,18 @@ import (
 	_ "github.com/lib/pq"
 )
 
+func corsMiddleware(c *gin.Context) {
+    c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+    c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+    c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+
+    if c.Request.Method == "OPTIONS" {
+        c.AbortWithStatus(http.StatusNoContent)
+        return
+    }
+    c.Next()
+}
+
 func main() {
     //init postgres and redis
     db, _ := initialise.InitializePostgres()
@@ -24,6 +36,7 @@ func main() {
 
     //routes
     router := gin.Default()
+    router.Use(corsMiddleware)
 
     router.GET("/hello", func(c *gin.Context) {
         c.String(http.StatusOK, "Hello World")
@@ -41,6 +54,12 @@ func main() {
     
     router.POST("/api/login/userid-password", func(c *gin.Context){
         handlers.LoginUserByUserIdPassword(c, ctx, db)
+    })
+    router.POST("/api/upload/init", func(c *gin.Context) {
+        handlers.InitializeUploadProcess(c, db)
+    })
+    router.POST("/api/upload/chunk", func(c *gin.Context) {
+        handlers.UploadChunk(c, db)
     })
 
     err := router.Run(os.Getenv("PORT"))
