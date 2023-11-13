@@ -41,6 +41,10 @@ func main() {
     router.GET("/hello", func(c *gin.Context) {
         c.String(http.StatusOK, "Hello World")
     })
+
+    router.GET("/api/validate-jwt", func(c *gin.Context) {
+        handlers.ValidateJWT_API(c)
+    })
     
 	router.POST("/api/register/send-email-otp", func(c *gin.Context) {
 		handlers.SendRegistrationEmail(c, ctx, redisClient)
@@ -60,6 +64,9 @@ func main() {
     })
     router.POST("/api/upload/chunk", func(c *gin.Context) {
         handlers.UploadChunk(c, db)
+    })
+    router.POST("/api/upload", func(c *gin.Context) {
+        handlers.MergeChunks(c, db)
     })
 
     err := router.Run(os.Getenv("PORT"))

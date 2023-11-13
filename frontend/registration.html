@@ -1,23 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Register Page</title>
   </head>
   <body>
     <h2>Register</h2>
-    <form id="registration-form">
-      <label for="new-username">Username:</label>
-      <input type="text" id="new-username" name="new-username" required /><br />
-      <label for="new-password">Password:</label>
-      <input
-        type="password"
-        id="new-password"
-        name="new-password"
-        required
-      /><br />
-      <button onclick="registerUser()">Register</button>
-    </form>
-    <p>Already have an account? <a href="index.html">Login here</a></p>
-    <script src="app.js"></script>
+    <div id="registration-container">
+      <div id="userid-email-section">
+        <label for="new-userid">UserId:</label>
+        <input type="text" id="new-userid" name="new-userid" required /><br />
+        <label for="new-email">Email:</label>
+        <input type="text" id="new-email" name="new-email" required /><br />
+      </div>
+
+      <div id="send-otp-section">
+        <button id="send-otp-button" onclick="sendOTP()">Send OTP</button><br />
+      </div>
+
+      <div id="otp-section" style="display: none">
+        <label for="otp">Enter OTP:</label>
+        <input type="text" id="otp" name="otp" required />
+        <button onclick="verifyOTP()">Verify OTP</button><br />
+      </div>
+
+      <div id="username-password-section" style="display: none">
+        <label for="new-username">Username:</label>
+        <input
+          type="text"
+          id="new-username"
+          name="new-username"
+          required
+        /><br />
+
+        <label for="new-password">Password:</label>
+        <input
+          type="password"
+          id="new-password"
+          name="new-password"
+          required
+        /><br />
+
+        <button id="submit-button" onclick="submitRegistrationDetails()">
+          Submit</button
+        ><br />
+      </div>
+    </div>
+
+    <p>Already have an account? <a href="login.html">Login here</a></p>
+    <script src="loginRegistration.js"></script>
   </body>
 </html>

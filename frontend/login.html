@@ -6,17 +6,23 @@
   <body>
     <div id="login-form">
       <h2>Login</h2>
-      <label for="username">Username:</label>
-      <input type="text" id="username" name="username" required /><br />
+      <label for="userid">UserId:</label>
+      <input type="text" id="userid" name="userid" required /><br />
       <label for="password">Password:</label>
       <input type="password" id="password" name="password" required /><br />
-      <button onclick="login()">Login</button>
+      <button onclick="loginUser()">Login</button>
     </div>
     <div id="registration-link">
       <p>
         Don't have an account? <a href="registration.html">Register here</a>
       </p>
     </div>
-    <script src="app.js"></script>
+    <div>
+      <button onclick="getCookie()">Show jwt</button>
+    </div>
+    <div>
+      <button onclick="clearCookie()">clear jwt cookie</button>
+    </div>
+    <script src="loginRegistration.js"></script>
   </body>
 </html>

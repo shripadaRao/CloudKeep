@@ -3,6 +3,7 @@ package user_login_utils
 import (
 	"CloudKeep/models"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -23,6 +24,23 @@ func GenerateJWT(user models.LoginUserModel) (string, error){
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	return tokenString, err
+}
+
+func ValidateJWT(tokenString string) (*models.JWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &models.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*models.JWTClaims)
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("Invalid JWT")
+	}
+
+	return claims, nil
 }
 
 func GetUserPasswordByUserId(db *sql.DB, userId string) (*models.User, error) {
