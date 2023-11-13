@@ -3,6 +3,7 @@
 ### OVERVIEW
 
 "CloudKeep" is a cloud-based file storage and sharing platform. Aims to provide a features similar to google drive service.
+Utilising chunk based file uploading pipeline, it provides faster upload speeds and resumeable uploads.
 
 ### QUICK START
 
@@ -54,8 +55,14 @@ request body:
 }
 ```
 
-### System Design
+### Design
 
 ##### User Registrations
 
 <img src="assets/user_registrations_workflow.png" alt="drawing" width="800" height="1000"/>
+
+##### User Login
+
+<img src="assets/auth-login-1.png" alt="drawing" width="700" height="300"/>
+
+<img src="assets/auth-login-2.png" alt="drawing" width="800" height="1000"/>
