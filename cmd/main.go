@@ -3,6 +3,7 @@ package main
 import (
 	"CloudKeep/handlers"
 	"CloudKeep/initialise"
+	"CloudKeep/utils/user_login_utils"
 	"context"
 	"log"
 	"net/http"
@@ -59,18 +60,53 @@ func main() {
     router.POST("/api/login/userid-password", func(c *gin.Context){
         handlers.LoginUserByUserIdPassword(c, ctx, db)
     })
-    router.POST("/api/upload/init", func(c *gin.Context) {
-        handlers.InitializeUploadProcess(c, db)
-    })
-    router.POST("/api/upload/chunk", func(c *gin.Context) {
-        handlers.UploadChunk(c, db)
-    })
-    router.POST("/api/upload", func(c *gin.Context) {
-        handlers.MergeChunks(c, db)
-    })
+
+    // ------- auth middleware ---------- //
+	uploadGroup := router.Group("/api/upload")
+	{
+		uploadGroup.POST("/init", authMiddleware, func(c *gin.Context) {
+			handlers.InitializeUploadProcess(c, db)
+		})
+
+		uploadGroup.POST("/chunk", authMiddleware, func(c *gin.Context) {
+			handlers.UploadChunk(c, db)
+		})
+
+		uploadGroup.POST("", authMiddleware, func(c *gin.Context) {
+			handlers.MergeChunks(c, db)
+		})
+	}
 
     err := router.Run(os.Getenv("PORT"))
     if err != nil {
         log.Fatalf("Error in running server: %v", err)
     }
+}
+
+func authMiddleware(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
+		c.Abort()
+		return
+	}
+
+	// Parse the Authorization header using ParseAuthHeader function
+	tokenString, err := user_login_utils.ParseAuthHeader(authHeader)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.Abort()
+		return
+	}
+
+	claims, err := user_login_utils.ValidateJWT(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid JWT"})
+		c.Abort()
+		return
+	}
+
+	// Set the validated claims in the context for use in the route handler
+	c.Set("claims", claims)
+	c.Next()
 }

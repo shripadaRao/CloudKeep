@@ -113,9 +113,11 @@ async function initializeVideoUploader(
   originalFileCheckSum
 ) {
   try {
+    jwtToken = getCookie();
+
     const uploadInitializationData = {
       video_id: crypto.randomUUID(),
-      user_id: "srao0",
+      user_id: userId,
       Status: "",
       chunk_filenames: chunkFileNamesInOrder,
       check_sum_map: chunkFileCheckSum,
@@ -126,6 +128,7 @@ async function initializeVideoUploader(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${jwtToken}`,
       },
       body: JSON.stringify(uploadInitializationData),
     });
@@ -146,6 +149,7 @@ async function uploadChunkFile(
   chunkFilename,
   chunkFileNamesInOrder
 ) {
+  jwtToken = getCookie();
   const videoInput = document.getElementById("videoInput");
   const file = videoInput.files[0];
 
@@ -179,6 +183,9 @@ async function uploadChunkFile(
 
       const response = await fetch(UPLOAD_CHUNK_API, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+        },
         body: formData,
       });
 
@@ -197,6 +204,7 @@ async function uploadChunkFile(
 
 async function uploadAllChunks(chunkFileNamesInOrder) {
   const successfulUploads = [];
+  jwtToken = getCookie();
 
   for (const chunkFilename of chunkFileNamesInOrder) {
     try {
@@ -228,6 +236,9 @@ async function mergeChunksAndCleanUp(videoId) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
     },
     body: JSON.stringify(data),
   });
