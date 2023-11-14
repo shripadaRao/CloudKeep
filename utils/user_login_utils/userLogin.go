@@ -4,6 +4,7 @@ import (
 	"CloudKeep/models"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -62,4 +63,15 @@ func ConstructUserLoginPassword(password string, salt string) string{
 func VerifyPassword(userInputPassword string, hashedPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(userInputPassword))
 	return err == nil
+}
+
+func ParseAuthHeader(authHeaderString string) (string, error){
+	tokenParts := strings.Split(authHeaderString, " ")
+	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		return "", fmt.Errorf("Invalid Authorization header format")
+	}
+	tokenString := tokenParts[1]
+
+	fmt.Println("token string", tokenString)
+	return tokenString, nil
 }

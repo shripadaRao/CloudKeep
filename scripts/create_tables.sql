@@ -15,10 +15,11 @@ CREATE TABLE IF NOT EXISTS user_table (
 CREATE TABLE IF NOT EXISTS video (
     video_id VARCHAR PRIMARY KEY,
     user_id VARCHAR,
-    status VARCHAR CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED')),
+    status VARCHAR CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETE')),
     total_chunks INT, 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    video_path VARCHAR   
+    video_path VARCHAR,
+    check_sum VARCHAR   
 );
 
 CREATE TABLE IF NOT EXISTS video_chunks (

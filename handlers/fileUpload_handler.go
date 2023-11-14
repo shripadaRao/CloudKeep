@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,7 @@ func InitializeUploadProcess(c *gin.Context, db *sql.DB) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message":"error in recieving response body"})
 		return
 	}
+	fmt.Println(uploadInitResponse.VideoID)
 
 	err := fileUpload_utils.PreUploadMetadataToVideoTable(uploadInitResponse, db)
 	if err != nil {
@@ -48,19 +50,19 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	//to-do check whether userid and vid match
 	var chunkVerificationDetails models.ChunkVerificationDetails
 	chunkID := form.Value["chunkID"][0]
 	fmt.Println(chunkID);
 	
-	details, err := fileUpload_utils.GetVideoDetails(db, chunkID)
+	chunkVerificationDetails, err = fileUpload_utils.GetChunkDetails(db, chunkID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch chunk details", "error": err.Error()})
 		return
 	}
-	
-	chunkVerificationDetails = *details
 	fmt.Println("chunk id: ",chunkVerificationDetails.ChunkID)
+
+    //to-do check whether userid and vid match through jwt and chunkVerificationDetails
+
 
 
 	// Assuming "chunkFile" is the name of the file input field in your form
@@ -76,12 +78,80 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	//check md5sum of the file received
+	// set chunk_path in db
+	err = fileUpload_utils.UpdateFieldInVideoChunksTable(db, chunkID, "chunk_path", getDestinationPath(chunkFile[0].Filename))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("error in updating status in chunk %v", chunkID), "error": err.Error()})
+		return
+	}
+
+	//checksum of the file received
 	if !fileUpload_utils.CalculateCompareSHA256(getDestinationPath(chunkFile[0].Filename), chunkVerificationDetails.Checksum) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Checksum failed"})
 		return	}
 
+	// set status codes of chunks as IN-SERVER
+	err = fileUpload_utils.UpdateFieldInVideoChunksTable(db, chunkID, "status", "IN-SERVER")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("error in updating status in chunk %v", chunkID), "error": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusAccepted, gin.H{"message": fmt.Sprintf("Chunkfile %v uploaded successfully", chunkFile[0].Filename), "error": nil})
 }
 
+func MergeChunks(c *gin.Context, db *sql.DB) {
+
+	type MergeChunksModel struct {
+		VideoId string  `json:"video_id"`
+	}
+	var  videoData MergeChunksModel
+	if err := c.ShouldBindJSON(&videoData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message":"error in recieving response body"})
+		return
+	}
+
+	// construct chunkFilenamesByOrder arr
+	chunkFileNamesInOrder, _ := fileUpload_utils.GetVideoSequencedChunks(db, videoData.VideoId)
+	var chunkFilePathsInOrder []string
+	for _, fileName := range chunkFileNamesInOrder {
+		chunkFilePath := fmt.Sprintf("/tmp/%s", fileName)
+		chunkFilePathsInOrder = append(chunkFilePathsInOrder, chunkFilePath)
+	}	
+
+	// merge all together
+	destinationFilePath := path.Join("/tmp", videoData.VideoId+".mp4")
+	fileUpload_utils.MergeChunks(chunkFilePathsInOrder, destinationFilePath)
+
+	// validate checksum for complete video
+	var originalFileDetails models.Video
+	originalFileDetails, _ = fileUpload_utils.GetFileDetailsFromId(db, videoData.VideoId)
+	
+	if !fileUpload_utils.CalculateCompareSHA256(destinationFilePath, originalFileDetails.CheckSum) {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Checksum failed"})
+		return	}	
+
+	// delete chunks
+	err := fileUpload_utils.DeleteFiles(chunkFilePathsInOrder...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error in deleting chunk files", "error" : err.Error()})
+		return
+	}
+
+	// set status 
+	err = fileUpload_utils.UpdateFieldInVideoTable(db, videoData.VideoId, "status", "COMPLETE")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error in updating status to complete in video table", "error" : err.Error()})
+		return 
+	}
+	err = fileUpload_utils.UpdateFieldInVideoTable(db, videoData.VideoId, "video_path", destinationFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error in updating status to complete in video table", "error" : err.Error()})
+		return
+	}		
+
+	c.JSON(http.StatusAccepted, gin.H{"message": fmt.Sprintf("merged the chunks and constructed video successfully. %v",destinationFilePath), "error": nil})
+}
+
+// kick off this as a optional background job
+func StoreMergedFileS3() {}

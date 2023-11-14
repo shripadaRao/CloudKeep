@@ -7,6 +7,7 @@ type UploadInitializationResponse struct {
     ChunkFileNames  []string            `json:"chunk_filenames"`
 	CheckSumMap     map[string]string   `json:"check_sum_map"`
     Status          VideoStatus         `json:"Status"`
+    FileCheckSum    string              `json:"original_file_checksum"`
 }
 
 type VideoStatus string
@@ -24,6 +25,7 @@ type Video struct {
     TotalChunks  int         `json:"total_chunks"`
     CreatedAt    string      `json:"created_at"`
     VideoPath    string      `json:"video_path"`
+    CheckSum     string      `json:"check_sum"`
 }
 
 type ChunkStatus string
