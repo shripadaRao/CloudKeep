@@ -28,7 +28,7 @@ services:
       - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/scripts/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./scripts/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
     ports:
       - "5432:5432"
 
