@@ -1,6 +1,7 @@
 package redis_utils
 
 import (
+	"CloudKeep/models"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,3 +39,13 @@ func RedisGetData(ctx context.Context, r *redis.Client, key string) (interface{}
     }
     return val, nil
 }
+
+func ParseTokenBucketString(data string) (*models.TokenBucket, error) {
+    var bucket models.TokenBucket
+    err := json.Unmarshal([]byte(data), &bucket)
+    if err != nil {
+        return nil, err
+    }
+    return &bucket, nil
+}
+

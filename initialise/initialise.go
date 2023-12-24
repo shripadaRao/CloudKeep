@@ -1,11 +1,15 @@
 package initialise
 
 import (
+	"CloudKeep/models"
+	"CloudKeep/utils/ratelimitingutils"
+	"CloudKeep/utils/redis_utils"
 	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
@@ -47,4 +51,14 @@ func InitializeRedis() (*redis.Client, error) {
 
     fmt.Println("Redis initialized and connected.")
     return client, nil
+}
+
+func RateLimitTokens(redisClient *redis.Client, ctx context.Context) error {
+
+    tokenBucketObj := models.TokenBucket{
+        AvailableTokens: ratelimitingutils.GlobalRateLimit,
+        LastRefilled: time.Now(),
+    }
+
+    return redis_utils.RedisSetData(ctx, redisClient, "rate_limit:global", tokenBucketObj, time.Hour*24)
 }
