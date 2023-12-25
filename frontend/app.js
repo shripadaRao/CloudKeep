@@ -7,6 +7,9 @@ const VIDEO_INITIALIZATION_API = `${BASE_API_URL}/upload/init`;
 const MERGE_CHUNKS_API = `${BASE_API_URL}/upload/merge`;
 const JWT_VALIDATION_API = `${BASE_API_URL}/validate-jwt`;
 const SIMPLE_UPLOAD_FILE_API = `${BASE_API_URL}/upload/simple-upload`;
+const UPLOAD_TO_S3_API = `${BASE_API_URL}/upload/bucket`;
+
+const CHUNK_SIZE = 10 * 1024 * 1024; //10MB
 
 var userId;
 
@@ -129,20 +132,22 @@ async function initializeVideoUploader(
       original_file_checksum: originalFileCheckSum,
     };
 
-    const response = await fetch(VIDEO_INITIALIZATION_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${jwtToken}`,
-      },
-      body: JSON.stringify(uploadInitializationData),
-    });
+    const uploadInitializationData_Response = await fetch(
+      VIDEO_INITIALIZATION_API,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwtToken}`,
+        },
+        body: JSON.stringify(uploadInitializationData),
+      }
+    );
 
-    const data = await response.json();
+    const data = await uploadInitializationData_Response.json();
     console.log("Success:", data);
 
-    // return response;
-    return { uploadInitializationData, response };
+    return { uploadInitializationData, uploadInitializationData_Response };
   } catch (error) {
     console.error("Error:", error);
     throw error;
@@ -209,82 +214,6 @@ async function uploadChunkFile(
 
 const chunkProgressMap = {};
 
-// async function uploadChunkFile(
-//   chunkSizeInBytes,
-//   chunkFilename,
-//   chunkFileNamesInOrder
-// ) {
-//   jwtToken = getCookie();
-//   const videoInput = document.getElementById("videoInput");
-//   const file = videoInput.files[0];
-
-//   const getChunkData = (chunkFilename) => {
-//     return new Promise((resolve, reject) => {
-//       const chunkIndex = chunkFileNamesInOrder.indexOf(chunkFilename);
-//       const chunkStart = chunkIndex * chunkSizeInBytes;
-//       const chunkEnd = Math.min((chunkIndex + 1) * chunkSizeInBytes, file.size);
-//       const chunk = file.slice(chunkStart, chunkEnd);
-
-//       const reader = new FileReader();
-//       reader.onload = (event) => {
-//         const arrayBuffer = event.target.result;
-//         const blob = new Blob([arrayBuffer], { type: file.type });
-//         resolve(blob);
-//       };
-//       reader.onerror = reject;
-//       reader.readAsArrayBuffer(chunk);
-//     });
-//   };
-
-//   const uploadChunk = () => {
-//     return new Promise(async (resolve, reject) => {
-//       if (file) {
-//         const xhr = new XMLHttpRequest();
-//         const formData = new FormData();
-//         formData.append(
-//           "chunkFile",
-//           await getChunkData(chunkFilename),
-//           chunkFilename
-//         );
-//         formData.append("chunkID", chunkFilename);
-
-//         xhr.open("POST", UPLOAD_CHUNK_API, true);
-//         xhr.setRequestHeader("Authorization", `Bearer ${jwtToken}`);
-
-//         // // Set up the progress event listener
-//         // xhr.upload.addEventListener("progress", (event) => {
-//         //   if (event.lengthComputable) {
-//         //     const percentage = (event.loaded / event.total) * 100;
-//         //     chunkProgressMap[chunkFilename] = percentage;
-//         //     console.log(
-//         //       `Chunk ${chunkFilename} - ${percentage.toFixed(2)}% uploaded`
-//         //     );
-//         //   }
-//         // });
-
-//         xhr.onreadystatechange = () => {
-//           if (xhr.readyState === XMLHttpRequest.DONE) {
-//             if (xhr.status === 200) {
-//               const result = JSON.parse(xhr.responseText);
-//               console.log(`Uploaded chunk ${chunkFilename}`, result);
-//               resolve(result);
-//             } else {
-//               reject(
-//                 new Error(`HTTP error: unable to upload chunk ${chunkFilename}`)
-//               );
-//             }
-//           }
-//         };
-
-//         // Send the chunk data
-//         xhr.send(formData);
-//       }
-//     });
-//   };
-
-//   return uploadChunk();
-// }
-
 async function uploadAllChunks(chunkFileNamesInOrder, chunkSizeInBytes) {
   const promises = [];
 
@@ -321,6 +250,7 @@ async function uploadAllChunks(chunkFileNamesInOrder, chunkSizeInBytes) {
 }
 
 async function mergeChunksAndCleanUp(videoId) {
+  jwtToken = getCookie();
   data = { video_id: videoId };
   const response = await fetch(MERGE_CHUNKS_API, {
     method: "POST",
@@ -334,31 +264,48 @@ async function mergeChunksAndCleanUp(videoId) {
     console.log(await response.json());
     console.log("Video has been merged");
   }
+  return response;
 }
 
-async function chunkAndUpload() {
-  const CHUNK_SIZE = 10 * 1024 * 1024; //10MB
+async function UploadPipeline() {
   const { chunkFileNamesInOrder, chunkFileCheckSum, originalFileCheckSum } =
     await getChunkFileNamesAndCheckSum(CHUNK_SIZE);
 
-  data = await initializeVideoUploader(
-    chunkFileNamesInOrder,
-    chunkFileCheckSum,
-    originalFileCheckSum
-  );
-  console.log("chunkFileNames: ", chunkFileNamesInOrder);
-  if (data.response.ok) {
-    isAllChunksUploaded = await uploadAllChunks(
+  const { uploadInitializationData, uploadInitializationData_Response } =
+    await initializeVideoUploader(
       chunkFileNamesInOrder,
-      CHUNK_SIZE
+      chunkFileCheckSum,
+      originalFileCheckSum
     );
-  }
-  if (isAllChunksUploaded) {
-    const videoId = data.uploadInitializationData["video_id"];
-    console.log("video id: ", videoId);
 
-    response = await mergeChunksAndCleanUp(videoId);
+  console.log(uploadInitializationData_Response);
+
+  if (!uploadInitializationData_Response.ok) {
+    console.log("Error in uploading initialation data");
+    return;
   }
+
+  isAllChunksUploaded = await uploadAllChunks(
+    chunkFileNamesInOrder,
+    CHUNK_SIZE
+  );
+
+  if (!isAllChunksUploaded) {
+    //retry mechanism here
+
+    console.log("couldnt (all) upload chunks");
+    return;
+  }
+
+  videoID = uploadInitializationData["video_id"];
+  mergeChunksAndCleanUp_Response = await mergeChunksAndCleanUp(videoID);
+  if (!mergeChunksAndCleanUp_Response) {
+    console.log("error in merging chunks");
+    return;
+  }
+  console.log("starting to upload file to s3");
+  console.log("videoID: ", videoID);
+  uploadFileToS3_Response = await uploadFileToS3(videoID);
 }
 
 async function simpleUploadFile() {
@@ -376,4 +323,24 @@ async function simpleUploadFile() {
     .catch((error) => {
       console.error("Error:", error);
     });
+}
+
+async function uploadFileToS3(videoID) {
+  try {
+    jwtToken = getCookie();
+    const response = await fetch(UPLOAD_TO_S3_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${jwtToken}`,
+      },
+      body: JSON.stringify({ video_id: videoID }),
+    });
+    if (response.ok) {
+      console.log(await response.json());
+      console.log("Video has been uploaded");
+    }
+  } catch (error) {
+    console.error("Error uploading file to S3:", error);
+  }
 }

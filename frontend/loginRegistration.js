@@ -1,4 +1,5 @@
 const BASE_API_URL = "http://127.0.0.1:3000/api";
+// const BASE_API_URL = "http://3.26.147.0:3000/api";
 
 const LOGIN_API = `${BASE_API_URL}/login/userid-password`;
 const REGISTER_SEND_EMAIL_OTP_API = `${BASE_API_URL}/register/send-email-otp`;

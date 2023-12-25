@@ -9,8 +9,12 @@
     <div id="uploadForm">
       <h3>Video Upload</h3>
       <input type="file" id="videoInput" accept="video/*" />
-      <button onclick="chunkAndUpload()">Chunk And Upload Video</button>
+      <button onclick="UploadPipeline()">Chunk And Upload Video</button>
       <button onclick="simpleUploadFile()">dummy upload</button>
+    </div>
+    <div class="dashboard-container">
+      <h3>Your Videos</h3>
+      <div class="videos-grid"></div>
     </div>
     <script src="app.js"></script>
   </body>
