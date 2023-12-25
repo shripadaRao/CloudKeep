@@ -71,15 +71,19 @@ func main() {
 	{
 		uploadGroup.Use(authMiddleware)
 
-		uploadGroup.POST("/init", authMiddleware, func(c *gin.Context) {
+		uploadGroup.POST("/simple-upload", rateLimitMiddleware(redisClient), func(c *gin.Context) {
+			handlers.SimpleTestUploadAPI(c, db)
+		})
+
+		uploadGroup.POST("/init", rateLimitMiddleware(redisClient), func(c *gin.Context) {
 			handlers.InitializeUploadProcess(c, db)
 		})
 
-		uploadGroup.POST("/chunk", authMiddleware, func(c *gin.Context) {
+		uploadGroup.POST("/chunk", rateLimitMiddleware(redisClient), func(c *gin.Context) {
 			handlers.UploadChunk(c, db)
 		})
 
-		uploadGroup.POST("/merge", authMiddleware, func(c *gin.Context) {
+		uploadGroup.POST("/merge", rateLimitMiddleware(redisClient), func(c *gin.Context) {
 			handlers.MergeChunks(c, db)
 		})
 	}

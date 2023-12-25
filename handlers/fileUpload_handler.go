@@ -13,14 +13,30 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func SimpleTestUploadAPI(c *gin.Context, db *sql.DB) {
+	file, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		filePath := getDestinationPath(file.Filename)
+		if err := c.SaveUploadedFile(file, filePath); err != nil {
+			fmt.Println("failed to upload file. filename: ", file.Filename)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "File uploaded successfully"})
+}
+
 func InitializeUploadProcess(c *gin.Context, db *sql.DB) {
 	var uploadInitResponse models.UploadInitializationResponse
 	if err := c.ShouldBindJSON(&uploadInitResponse); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message":"error in recieving response body"})
 		return
 	}
-	fmt.Println(uploadInitResponse.VideoID)
-
+	
 	err := fileUpload_utils.PreUploadMetadataToVideoTable(uploadInitResponse, db)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing to video table", "error": err.Error()})
@@ -32,6 +48,7 @@ func InitializeUploadProcess(c *gin.Context, db *sql.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing to video chunks table", "error": err.Error()})
 		return
 	}
+	fmt.Println("file uploading initialized for, filename: ",uploadInitResponse.VideoID )
 	c.JSON(http.StatusAccepted, gin.H{"message": "Upload pipeline is initialized", "error": nil})
 
 }
@@ -39,7 +56,6 @@ func InitializeUploadProcess(c *gin.Context, db *sql.DB) {
 func getDestinationPath(filename string) string {
 	tempDir := os.TempDir()
 	destinationPath := filepath.Join(tempDir, filename)
-	fmt.Println("chunk saved at: ",destinationPath)
 	return destinationPath
 }
 
@@ -52,14 +68,14 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 
 	var chunkVerificationDetails models.ChunkVerificationDetails
 	chunkID := form.Value["chunkID"][0]
-	fmt.Println(chunkID);
+	fmt.Println("uploading chunkID: ",chunkID);
 	
 	chunkVerificationDetails, err = fileUpload_utils.GetChunkDetails(db, chunkID)
 	if err != nil {
+		fmt.Println("Failed to fetch chunk details. chunkID: ", chunkID)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch chunk details", "error": err.Error()})
 		return
 	}
-	fmt.Println("chunk id: ",chunkVerificationDetails.ChunkID)
 
     //to-do check whether userid and vid match through jwt and chunkVerificationDetails
 
@@ -68,12 +84,14 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 	// Assuming "chunkFile" is the name of the file input field in your form
 	chunkFile, exists := form.File["chunkFile"]
 	if !exists || len(chunkFile) == 0 {
+		fmt.Println("failed to recieve/read chunk file from form data. ChunkID: ", chunkID)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "failed to recieve/read chunk file from form data"})
 		return
 	}
 
 	err = c.SaveUploadedFile(chunkFile[0], getDestinationPath(chunkFile[0].Filename))
 	if err != nil {
+		fmt.Println("Failed to store chunk file. chunkID", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to store chunk file", "error": err.Error()})
 		return
 	}
@@ -81,18 +99,21 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 	// set chunk_path in db
 	err = fileUpload_utils.UpdateFieldInVideoChunksTable(db, chunkID, "chunk_path", getDestinationPath(chunkFile[0].Filename))
 	if err != nil {
+		fmt.Println(fmt.Sprintf("error in updating status in chunk %v", chunkID), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("error in updating status in chunk %v", chunkID), "error": err.Error()})
 		return
 	}
 
 	//checksum of the file received
 	if !fileUpload_utils.CalculateCompareSHA256(getDestinationPath(chunkFile[0].Filename), chunkVerificationDetails.Checksum) {
+		fmt.Println("chunk checksum failed. chunkID: ", chunkID)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Checksum failed"})
 		return	}
 
 	// set status codes of chunks as IN-SERVER
 	err = fileUpload_utils.UpdateFieldInVideoChunksTable(db, chunkID, "status", "IN-SERVER")
 	if err != nil {
+		fmt.Println(fmt.Sprintf("error in updating status in chunk %v", chunkID), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("error in updating status in chunk %v", chunkID), "error": err.Error()})
 		return
 	}
