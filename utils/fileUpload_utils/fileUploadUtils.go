@@ -9,6 +9,11 @@ import (
 	"io"
 	"os"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 )
 
@@ -206,3 +211,44 @@ func UpdateFieldInVideoChunksTable(db *sql.DB, chunkID, fieldName string, newVal
 }
 
 // func VerifyVideoIdWithUserId(db *sql.DB, videoID)
+
+func UploadFileToS3(filepath string) (string, error) {
+    file, err := os.Open(filepath)
+    if err != nil {
+        fmt.Println("Error opening file:", err)
+        return "", err
+    }
+    defer file.Close()
+
+    sess, err := session.NewSession(&aws.Config{
+        Region: aws.String(os.Getenv("AWS_REGION")),
+        Credentials: credentials.NewStaticCredentials(
+            os.Getenv("AWS_ACCESS_KEY_ID"),
+            os.Getenv("AWS_SECRET_ACCESS_KEY"),
+            "",
+        ),
+    })
+    if err != nil {
+        fmt.Println("Error creating AWS session:", err)
+        return "", err
+    }
+
+    s3Client := s3.New(sess)
+
+    s3FileNameUUID, _ := uuid.NewRandom()
+    s3FileName := s3FileNameUUID.String() + ".mp4"
+
+    _, err = s3Client.PutObject(&s3.PutObjectInput{
+        Bucket: aws.String(os.Getenv("BUCKET_NAME")),
+        Key:    aws.String(s3FileName),
+        Body:   file,
+    })
+    if err != nil {
+        fmt.Println("Error uploading file to S3:", err)
+        return "", err
+    }
+
+    // Construct and return the S3 URI
+    s3URI := fmt.Sprintf("s3://%s/%s", os.Getenv("BUCKET_NAME"), s3FileName)
+    return s3URI, nil
+}

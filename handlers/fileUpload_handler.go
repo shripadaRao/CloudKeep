@@ -20,7 +20,7 @@ func SimpleTestUploadAPI(c *gin.Context, db *sql.DB) {
 			return
 		}
 
-		filePath := getDestinationPath(file.Filename)
+		filePath := getDestinationPath(file.Filename, true)
 		if err := c.SaveUploadedFile(file, filePath); err != nil {
 			fmt.Println("failed to upload file. filename: ", file.Filename)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
@@ -53,10 +53,12 @@ func InitializeUploadProcess(c *gin.Context, db *sql.DB) {
 
 }
 
-func getDestinationPath(filename string) string {
+func getDestinationPath(filename string, isMP4 bool) string {
 	tempDir := os.TempDir()
 	destinationPath := filepath.Join(tempDir, filename)
-	return destinationPath
+	if !isMP4{
+	return destinationPath }
+	return destinationPath + ".mp4"
 }
 
 func UploadChunk(c *gin.Context, db *sql.DB) {
@@ -89,7 +91,7 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	err = c.SaveUploadedFile(chunkFile[0], getDestinationPath(chunkFile[0].Filename))
+	err = c.SaveUploadedFile(chunkFile[0], getDestinationPath(chunkFile[0].Filename, false))
 	if err != nil {
 		fmt.Println("Failed to store chunk file. chunkID", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to store chunk file", "error": err.Error()})
@@ -97,7 +99,7 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 	}
 
 	// set chunk_path in db
-	err = fileUpload_utils.UpdateFieldInVideoChunksTable(db, chunkID, "chunk_path", getDestinationPath(chunkFile[0].Filename))
+	err = fileUpload_utils.UpdateFieldInVideoChunksTable(db, chunkID, "chunk_path", getDestinationPath(chunkFile[0].Filename, false))
 	if err != nil {
 		fmt.Println(fmt.Sprintf("error in updating status in chunk %v", chunkID), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("error in updating status in chunk %v", chunkID), "error": err.Error()})
@@ -105,7 +107,7 @@ func UploadChunk(c *gin.Context, db *sql.DB) {
 	}
 
 	//checksum of the file received
-	if !fileUpload_utils.CalculateCompareSHA256(getDestinationPath(chunkFile[0].Filename), chunkVerificationDetails.Checksum) {
+	if !fileUpload_utils.CalculateCompareSHA256(getDestinationPath(chunkFile[0].Filename, false), chunkVerificationDetails.Checksum) {
 		fmt.Println("chunk checksum failed. chunkID: ", chunkID)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Checksum failed"})
 		return	}
@@ -174,5 +176,58 @@ func MergeChunks(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusAccepted, gin.H{"message": fmt.Sprintf("merged the chunks and constructed video successfully. %v",destinationFilePath), "error": nil})
 }
 
-// kick off this as a optional background job
-func StoreMergedFileS3() {}
+// kick off this as a background job
+func StoreMergedFileS3(c *gin.Context, db *sql.DB) {
+	type VideoIDStruct struct {
+		VideoID string  `json:"video_id"`
+	}
+	var  requestObj VideoIDStruct
+	if err := c.ShouldBindJSON(&requestObj); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message":"error in recieving response body"})
+		return
+	}
+
+	fmt.Println("videoid: ", requestObj.VideoID)
+
+	// check if video belongs to user - postgres query
+	var UserID string
+	query := `SELECT user_id FROM video WHERE video_id = $1 `
+	row := db.QueryRow(query, requestObj.VideoID)
+	err := row.Scan(&UserID)
+	if err != nil {
+		fmt.Println("Error in fetching userID from videoID", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message":"Error in fetching userID from videoID"})
+		return
+	}
+	claims, _ := c.Get("claims")
+	jwtUserID := claims.(*models.JWTClaims).UserId
+
+	if UserID != jwtUserID {
+		fmt.Println("Mismatch in userID, request failed")
+		c.JSON(http.StatusBadRequest, gin.H{"message":"Mismatch in userID, request failed"})
+		return
+	}
+
+	// push to s3
+	s3URI, err := fileUpload_utils.UploadFileToS3(getDestinationPath(requestObj.VideoID, true))
+	if err != nil {
+		fmt.Println("Error in Uploading video file to s3", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message":"Error in Uploading video file to s3", "error": err.Error()})
+		return
+	}
+	
+	// update filepath in postgres
+	err = fileUpload_utils.UpdateFieldInVideoTable(db, requestObj.VideoID, "video_path", s3URI)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error in updating status to complete in video table", "error" : err.Error()})
+		return 
+	}
+
+	// clean up disk - delete file from /tmp
+	err = os.Remove(getDestinationPath(requestObj.VideoID, true))
+	if err != nil {
+		fmt.Println("Error deleting file: ", err)
+	}
+	c.JSON(http.StatusAccepted, gin.H{"message": "video file successfully pushed to s3 and removed from /tmp", "error": nil})
+
+}

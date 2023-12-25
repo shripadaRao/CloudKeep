@@ -86,6 +86,9 @@ func main() {
 		uploadGroup.POST("/merge", rateLimitMiddleware(redisClient), func(c *gin.Context) {
 			handlers.MergeChunks(c, db)
 		})
+		uploadGroup.POST("/bucket", rateLimitMiddleware(redisClient), func(c *gin.Context) {
+			handlers.StoreMergedFileS3(c, db)
+		})
 	}
 
     err := router.Run(os.Getenv("PORT"))
