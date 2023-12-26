@@ -11,49 +11,40 @@ Download & Install Docker
 
 `git clone https://github.com/shripadaRao/CloudKeep.git `
 
+cd into CloudKeep
+
 `sudo docker-compose up --build`
 
-### API DESIGN
+### Project Functionalities
 
 ##### User Registration
 
-Description: Allows users to create a new account. To configure the template of email, head to config/registerEmailTemplate.json.
+Users can create an account using their email, receiving an OTP for verification. Upon entering the OTP and providing required details, the account is generated. Customize the registration email template in config/registerEmailTemplate.json.
 
-1. `POST` `/api/register/send-email-otp`
+##### User Login
 
-###### Description: Send an OTP email to a user
+Users log in with their userID and password. Forgot Password is a work in progress. After successful login, a JWT is sent, stored as a cookie for authentication in subsequent API requests. Multi-Factor Authentication (MFA) is under development.
 
-Request Body:
+##### Video Uploads
 
-```
-{
-    "userId": string,
-    "userEmail": string
-}
-```
+Users can upload videos to the server using a chunked upload mechanism. This mechanism allows speedy uploads. The client-side chunks are sent to the server in parallel, where they are reconstructed, and checksums are used to verify data integrity. Upon successful reconstruction, the video file is pushed to S3 storage.
 
-2. `POST` `/api/register/verify-otp`
+Future Work:
+Automated Video Captioning, label generation and other video processing.
+Video Compression
+Resumeable Uploads
 
-```
-request body:
-{
-    "OTP": string,
-    "userId": string,
-    "userEmail": string
-}
-```
+##### Rate Limiting
 
-3. `POST` `/api/register/create-user`
+Each request is rate limited using token bucket algorithm implemented with redis.
+It is a layered system. There is global rate limiting and user based rate limiting.
+Each api request has a cost factor and a different refill rate which consumes different amount of tokens.
 
-```
-request body:
-{
-    "userName": string,
-    "userId": string,
-    "password": string,
-    "userEmail": string
-}
-```
+Rate limiting is applied to each request utilizing the token bucket algorithm through Redis. The system has a layered approach, that is both global and user-specific rate limiting.
+
+Every API request is assigned a cost factor(token consumption) and different refill rate.
+
+##### Video Compression
 
 ### Design
 
@@ -66,3 +57,11 @@ request body:
 <img src="assets/auth-login-1.png" alt="drawing" width="700" height="300"/>
 
 <img src="assets/auth-login-2.png" alt="drawing" width="800" height="1000"/>
+
+##### Video upload pipeline with Compressor Service
+
+<img src="assets/video-upload-pipeline-with-compressor.png" alt="drawing" width="800" height="200"/>
+
+##### Compressor Service
+
+<img src="assets/video-compressor-service.png" alt="drawing" width="700" height="300"/>
