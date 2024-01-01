@@ -23,34 +23,32 @@ Users can create an account using their email, receiving an OTP for verification
 
 ##### User Login
 
-Users log in with their userID and password. Forgot Password is a work in progress. After successful login, a JWT is sent, stored as a cookie for authentication in subsequent API requests. Multi-Factor Authentication (MFA) is under development.
+Users log in with their userID and password. After successful login, a JWT is sent, stored as a cookie for authentication in subsequent API requests. Forgot Password and Multi-Factor Authentication (MFA) is under development.
 
 ##### Video Uploads
 
 Users can upload videos to the server using a chunked upload mechanism. This mechanism allows speedy uploads. The client-side chunks are sent to the server in parallel, where they are reconstructed, and checksums are used to verify data integrity. Upon successful reconstruction, the video file is pushed to S3 storage.
 
 Future Work:
-Automated Video Captioning, label generation and other video processing.
-Video Compression
-Resumeable Uploads
+
+- Automated Video Captioning, label generation and other video processing.
+- Resumeable Uploads
 
 ##### Rate Limiting
 
 Each request is rate limited using token bucket algorithm implemented with redis.
-It is a layered system. There is global rate limiting and user based rate limiting.
-Each api request has a cost factor and a different refill rate which consumes different amount of tokens.
-
-Rate limiting is applied to each request utilizing the token bucket algorithm through Redis. The system has a layered approach, that is both global and user-specific rate limiting.
-
-Every API request is assigned a cost factor(token consumption) and different refill rate.
+It is designed as a layered system. There is global rate limiting and user based rate limiting.
+Each api request has a cost factor which consumes different amount of tokens.
 
 ##### Video Compression
 
-### Design
+### Project Architecture
 
-##### User Registrations
+<img src="assets/project-architecture.drawio.png" alt="drawing" width="800" height="800"/>
 
-<img src="assets/user_registrations_workflow.png" alt="drawing" width="800" height="1000"/>
+#### User Registrations
+
+<img src="assets/user-registrations-workflow.drawio.png" alt="drawing" width="800" height="1000"/>
 
 ##### User Login
 
